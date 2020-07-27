@@ -1,51 +1,75 @@
-import React, { useState } from "react";
-import io from "socket.io-client";
+import React, { useState, useEffect } from 'react';
+import InfoBar from '../InfoBar/InfoBar';
+import Input from '../Input/Input';
+import Messages from '../Messages/Messages';
+import TextContainer from '../TextContainer/TextContainer';
 
-import Message from '../Message/Message';
-import './Chat.css'
+import queryString from 'query-string';
+import io from 'socket.io-client';
 
-const socket = io('localhost:5000');
+import './Chat.css';
+
+let socket;
 
 const Chat = () => {
+  const [name, setName] = useState('');
+  const [room, setRoom] = useState('');
+  const [users, setUsers] = useState('');
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
+  const ENDPOINT = 'http://localhost:5000';
 
-  socket.on('RECEIVE_MESSAGE', (data) => {
-    setMessages([...messages, data]);
+  useEffect(() => {
+    const { name, room } = queryString.parse(window.location.search);
 
-  });
+    socket = io(ENDPOINT);
 
-  socket.on('INIT', (data) => {
-    console.log(data);
-  })
+    setName(name);
+    setRoom(room);
 
-  const handleChange = (event) => {
-    setMessage(event.target.value)
-  }
+    socket.emit('join', { name, room }, () => {});
 
+    return () => {
+      socket.emit('disconnect');
+      socket.off();
+    };
+  }, [ENDPOINT, window.location.search]);
+
+  useEffect(() => {
+    socket.on('message', (message) => {
+      setMessages([...messages, message]);
+    });
+
+    socket.on('roomData', ({ users }) => {
+      setUsers(users);
+    });
+  }, [messages]);
+
+  // sending messages
   const sendMessage = (event) => {
     event.preventDefault();
 
-    socket.emit('SEND_MESSAGE', message);
+    if (message) {
+      socket.emit('sendMessage', message, () => setMessage(''));
+    }
+  };
 
-    setMessage('');
-  }
+  console.log(message, messages);
 
   return (
-    <div className="container">
-      <div className="rectangle">
-        <div className="messages">
-          <h1>Messages</h1>
-          {messages.map((message, i) => <Message key={i} message={message} />)}
-        </div>
-
-        <form className="form">
-          <input id="commonSearchTerm" type="text" placeholder="Message" value={message} onChange={handleChange} />
-          <button id="searchButton" type="submit" onClick={sendMessage}>Send</button>
-        </form>
+    <div className='outerContainer'>
+      <div className='container'>
+        <InfoBar room={room} />
+        <Messages messages={messages} name={name} />
+        <Input
+          message={message}
+          setMessage={setMessage}
+          sendMessage={sendMessage}
+        />
       </div>
+      <TextContainer users={users} />
     </div>
   );
-}
+};
 
 export default Chat;
